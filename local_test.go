@@ -1,4 +1,4 @@
-package filestore
+package filestore_test
 
 import (
 	"bytes"
@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/climech/filestore"
 )
 
 func TestFilestoreLocal(t *testing.T) {
@@ -18,8 +20,8 @@ func TestFilestoreLocal(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	var store Filestore
-	store, err = NewFilestoreLocal(dir)
+	var store filestore.Filestore
+	store, err = filestore.NewFilestoreLocal(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestFilestoreLocal(t *testing.T) {
 	// Get a non-existent file.
 	if _, err := store.Get(ctx, "non-existent.txt"); err == nil {
 		t.Errorf("no error returned when trying to get a non-existent file")
-	} else if err != ErrFileNotFound {
+	} else if err != filestore.ErrFileNotFound {
 		t.Errorf("wrong error when trying to get a non-existent file; "+
 			"want ErrFileNotFound, got err of type %s: %v", reflect.TypeOf(err), err)
 	}
@@ -72,7 +74,7 @@ func TestFilestoreLocal(t *testing.T) {
 	// Delete non-existent file.
 	if err := store.Remove(ctx, "non-existent.txt"); err == nil {
 		t.Errorf("no error returned when trying to delete a non-existent file")
-	} else if err != ErrFileNotFound {
+	} else if err != filestore.ErrFileNotFound {
 		t.Errorf("wrong error when trying to remove a non-existent file; "+
 			"want ErrFileNotFound, got err of type %s: %v", reflect.TypeOf(err), err)
 	}
