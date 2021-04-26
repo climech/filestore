@@ -52,18 +52,20 @@ func (l *FilestoreLocal) Get(_ context.Context, path string) (File, error) {
 
 func (l *FilestoreLocal) Insert(_ context.Context, r io.Reader, dest string) error {
 	// Write to temporary file first, in case dest already exists and is currently
-	// in use.
-	tmpFile, err := ioutil.TempFile("", "")
+	// in use. Use the same directory as dest to ensure both files are stored on
+	// the same device.
+	tmpFile, err := ioutil.TempFile(l.dir, ".tmp_*")
 	if err != nil {
 		return err
 	}
 	defer tmpFile.Close()
+	defer os.Remove(tmpFile.Name()) // in case error occurs before file is moved
 
-	tmp := bufio.NewWriter(tmpFile)
-	if _, err := tmp.ReadFrom(r); err != nil {
+	w := bufio.NewWriter(tmpFile)
+	if _, err := w.ReadFrom(r); err != nil {
 		return err
 	}
-	if err := tmp.Flush(); err != nil {
+	if err := w.Flush(); err != nil {
 		return err
 	}
 	if err := tmpFile.Close(); err != nil {
