@@ -3,6 +3,7 @@ package filestore_test
 import (
 	"bytes"
 	"context"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -20,39 +21,59 @@ func TestFilestoreLocal(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	var store filestore.Filestore
-	store, err = filestore.NewFilestoreLocal(dir)
+	filePerm := fs.FileMode(0601)
+	dirPerm := fs.FileMode(0701)
+	store, err := filestore.NewFilestoreLocal(
+		filestore.SetLocalDir(dir),
+		filestore.SetLocalFilePerm(filePerm),
+		filestore.SetLocalDirPerm(dirPerm),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fileText := "Hello world!\n"
-	filePath := filepath.Join("subdir", "test.txt")
+	text := "Hello world!\n"
+	fp := filepath.Join("subdir", "test.txt")
 	ctx := context.Background()
 
-	if err := store.Insert(ctx, strings.NewReader(fileText), filePath); err != nil {
+	if err := store.Insert(ctx, strings.NewReader(text), fp); err != nil {
 		t.Fatal(err)
 	}
 
 	// Check if the file was saved correctly on the filesystem.
-	if b, err := ioutil.ReadFile(filepath.Join(dir, filePath)); err != nil {
+	if b, err := ioutil.ReadFile(filepath.Join(dir, fp)); err != nil {
 		t.Fatal(err)
-	} else if string(b) != fileText {
-		t.Fatalf(`file contents mismatch; got "%v",  want "%v"`, string(b), fileText)
+	} else if string(b) != text {
+		t.Fatalf(`file contents mismatch; got "%v",  want "%v"`, string(b), text)
 	}
 
+	checkPermissions := func(fp string, perm fs.FileMode) {
+		info, err := os.Stat(fp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		permWant := perm.Perm()
+		permGot := info.Mode().Perm()
+		if permWant != permGot {
+			t.Errorf(`incorrect permissions for '%s': want %s, got %s`,
+				fp, permWant, permGot)
+		}
+	}
+	checkPermissions(filepath.Join(dir, fp), filePerm)
+	checkPermissions(filepath.Join(dir, filepath.Dir(fp)), dirPerm)
+
 	// Get an existing file.
-	if f, err := store.Get(ctx, filePath); err != nil {
-		t.Errorf("couldn't get file '%s': %v", filePath, err)
+	if f, err := store.Get(ctx, fp); err != nil {
+		t.Errorf("couldn't get file '%s': %v", fp, err)
 	} else {
 		defer f.Close()
 		var buf bytes.Buffer
 		if _, err := buf.ReadFrom(f); err != nil {
 			t.Errorf("couldn't read data from File: %v", err)
 		}
-		text := buf.String()
-		if text != fileText {
-			t.Errorf(`file contents mismatch; got "%v",  want "%v"`, text, fileText)
+		s := buf.String()
+		if s != text {
+			t.Errorf(`file contents mismatch; got "%v",  want "%v"`, s, text)
 		}
 	}
 
@@ -65,10 +86,10 @@ func TestFilestoreLocal(t *testing.T) {
 	}
 
 	// Delete existing file.
-	if err := store.Remove(ctx, filePath); err != nil {
-		t.Errorf("couldn't delete file '%s': %v", filePath, err)
-	} else if _, err := os.Stat(filepath.Join(dir, filePath)); os.IsExist(err) {
-		t.Errorf("file '%s' exists after deletion", filePath)
+	if err := store.Remove(ctx, fp); err != nil {
+		t.Errorf("couldn't delete file '%s': %v", fp, err)
+	} else if _, err := os.Stat(filepath.Join(dir, fp)); os.IsExist(err) {
+		t.Errorf("file '%s' exists after deletion", fp)
 	}
 
 	// Delete non-existent file.
